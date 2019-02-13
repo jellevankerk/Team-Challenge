@@ -79,6 +79,7 @@ ES_volume = np.sum(gt_ES_np==3)*voxelvolume
 strokevolume = ED_volume - ES_volume
 LV_EF = (strokevolume/ED_volume)*100
 
+# print the EF
 print('LV stroke volume is {:.2f} ml and ejection fraction is {:.2f}%'.format(strokevolume*0.001, LV_EF))
 
 

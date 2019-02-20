@@ -32,6 +32,9 @@ def main():
     # load all images
     ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings = loadImages(paths)  
 
+    
+    
+    
     # preprocess images to same x,y dimensions
     ED_ims_red = reduceDimensions(images=ED_ims, dims=[144,144])
     ES_ims_red = reduceDimensions(images=ES_ims, dims=[144,144])
@@ -71,16 +74,15 @@ def main():
     Ytrain = gt_allimages[:trainingsamples]
     
 
-    
     # create validation set (X) and corresponding ground truth labels (Y)
     Xvalid = allimages[trainingsamples:]
     Yvalid = gt_allimages[trainingsamples:]
     
     # need extra dimension, input should be (image, rows, cols, channels)
-    Xtrain = np.expand_dims(Xtrain, axis=3)
-    Xvalid = np.expand_dims(Xvalid, axis=3)
+    Xtrain = np.expand_dims(Xtrain, axis=3) #(1522, 144, 144, 1)
+    Xvalid = np.expand_dims(Xvalid, axis=3) 
    
-    Ytrain = to_categorical(Ytrain)
+    Ytrain = to_categorical(Ytrain) #(1522, 144, 144, 4)
     Yvalid = to_categorical(Yvalid)
     
     print(Xtrain.shape) #1522,144,144,1
@@ -88,7 +90,6 @@ def main():
     
     print(Ytrain.shape) #1522,144,144,4
     print(Yvalid.shape) #380,144,144,4
-    
     
     # initialize network
     unet_2D = get_unet_2D(144,144)
@@ -102,8 +103,8 @@ def main():
         unet_2D = keras.models.load_model(networkpath_2D)
     
     return
-
-
+    
+    
 
 def loadImages(paths):
     print("Loading images...")
@@ -212,40 +213,40 @@ def reduceDimensions(images, dims):
     return images_red
 
 def get_unet_2D(img_rows, img_cols):
-    inputs = Input(shape=(img_rows, img_cols, 1)) #(batch, dim1, dim2, channels)
+    inputs = Input(shape=(img_rows, img_cols, 1)) #(1, dim1, dim2, channels)
     print(inputs.shape)
     
-    conv1 = Convolution2D(64, (3, 3), activation='relu', padding='same', data_format='channels_last')(inputs)
-    conv1 = Convolution2D(64, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv1)
+    conv1 = Convolution2D(10, (3, 3), activation='relu', padding='same', data_format='channels_last')(inputs)
+    conv1 = Convolution2D(10, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv1)
     pool1 = MaxPooling2D(pool_size=(2, 2), padding='same')(conv1)
-
-    conv2 = Convolution2D(128, (3, 3), activation='relu', padding='same', data_format='channels_last')(pool1)
-    conv2 = Convolution2D(128, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv2)
+    
+    conv2 = Convolution2D(20, (3, 3), activation='relu', padding='same', data_format='channels_last')(pool1)
+    conv2 = Convolution2D(20, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv2)
     pool2 = MaxPooling2D(pool_size=(2, 2), padding='same')(conv2)
     
-    conv3 = Convolution2D(256, (3, 3), activation='relu', padding='same', data_format='channels_last')(pool2)
-    conv3 = Convolution2D(256, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv3)
+    conv3 = Convolution2D(40, (3, 3), activation='relu', padding='same', data_format='channels_last')(pool2)
+    conv3 = Convolution2D(40, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv3)
     pool3 = MaxPooling2D(pool_size=(2, 2), padding='same')(conv3)
-  
-    conv4 = Convolution2D(512, (3, 3), activation='relu', padding='same', data_format='channels_last')(pool3)
-    conv4 = Convolution2D(512, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv4)
+    
+    conv4 = Convolution2D(80, (3, 3), activation='relu', padding='same', data_format='channels_last')(pool3)
+    conv4 = Convolution2D(80, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv4)
     
     up1 = UpSampling2D(size=(2, 2))(conv4)
     up1 = concatenate([conv3, up1], axis=3)
-    conv5 = Convolution2D(256, (3, 3), activation='relu', padding='same', data_format='channels_last')(up1)
-    conv5 = Convolution2D(256, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv5)
+    conv5 = Convolution2D(40, (3, 3), activation='relu', padding='same', data_format='channels_last')(up1)
+    conv5 = Convolution2D(40, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv5)
     
     up2 = UpSampling2D(size=(2, 2))(conv5)
     up2 = concatenate([conv2, up2], axis=3)
-    conv6 = Convolution2D(128, (3, 3), activation='relu', padding='same', data_format='channels_last')(up2)
-    conv6 = Convolution2D(128, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv6)
+    conv6 = Convolution2D(20, (3, 3), activation='relu', padding='same', data_format='channels_last')(up2)
+    conv6 = Convolution2D(20, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv6)
     
     up3 = UpSampling2D(size=(2, 2))(conv6)
     up3 = concatenate([conv1, up3], axis=3)
-    conv7 = Convolution2D(64, (3, 3), activation='relu', padding='same', data_format='channels_last')(up3)
-    conv7 = Convolution2D(64, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv7)
+    conv7 = Convolution2D(10, (3, 3), activation='relu', padding='same', data_format='channels_last')(up3)
+    conv7 = Convolution2D(10, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv7)
     
-    conv7 = Convolution2D(1, (1, 1), activation='softmax')(conv7)
+    conv7 = Convolution2D(4, (1, 1), activation='softmax')(conv7)
     
     unet = Model(inputs=inputs, outputs=conv7)
     

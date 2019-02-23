@@ -19,18 +19,28 @@ from keras.layers import Input, concatenate, Convolution2D, MaxPooling2D, UpSamp
 from keras.optimizers import SGD
 from keras.utils import to_categorical
 import keras
+from scipy import ndimage
 
 def main():
-    paths = glob.glob(r'C:/Users/Administrator/Documents/Team_Challenge/Analysis/TeamChallenge/Data/patient*/patient*_frame*.nii.gz')
+    paths = glob.glob(r'C:/Users/s152837/Desktop/Team-Challenge/Data/patient*/patient*_frame*.nii.gz')
+    pathsscans = glob.glob(r'C:/Users/s152837/Desktop/Team-Challenge/Data/patient*/patient*_4d.nii.gz')
     networkpath_2D = r'PATH/trainednetwork_2D.h5'
+    
     
     trainnetwork = True
     trainingsetsize = 0.8
     nr_epochs = 200
     minibatchsize = 8
     
+    #load entire scan
+    scans = loadscan(pathsscans)
+    
     # load all images
     ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings = loadImages(paths)  
+
+    #Normalisation # nog even waarde tussen 0 , 1 doen nu is het I/sd dus waardes zijn nog wel hoger dan 1(max 5)
+    normalize(scans, ED_ims)
+    normalize(scans, ES_ims)
 
     # preprocess images to same x,y dimensions
     ED_ims_red = reduceDimensions(images=ED_ims, dims=[144,144])
@@ -39,7 +49,7 @@ def main():
     gt_ES_ims_red = reduceDimensions(images=gt_ES_ims, dims=[144,144])
     
     # display some slices    
-    #displaySlices(ED_ims_red, patient=77)
+    displaySlices(ED_ims_red, patient=77)
     
     # display reference segmentations over slices
     #displayReferenceSegmentations(ED_ims_red, gt_ED_ims_red, patient=77)
@@ -103,7 +113,32 @@ def main():
     
     return
 
+def normalize(scans , images):
+    
+    for i in range(len(scans)):
+        flat = scans[i].flatten()
+        std = np.std(flat)
+        images[i] = images[i]/std
+        
+def centerROI(gt_images):
+    centers = []
+    for i in range(len(gt_images[0])):
+        for j in range(len(gt_images[1])):
+            im = gt_images[i][j]
+            im[im>1] = 1
+            center=ndimage.measurements.center_of_mass(im)
+            centers.append(center)
+            
+        
+     
 
+def loadscan(paths):
+    scans = []
+    for i in range(len(paths)):
+            imscan = sitk.ReadImage(paths[i]) 
+            scans.append(sitk.GetArrayFromImage(imscan))
+    return scans
+    
 
 def loadImages(paths):
     print("Loading images...")
@@ -245,7 +280,7 @@ def get_unet_2D(img_rows, img_cols):
     conv7 = Convolution2D(64, (3, 3), activation='relu', padding='same', data_format='channels_last')(up3)
     conv7 = Convolution2D(64, (3, 3), activation='relu', padding='same', data_format='channels_last')(conv7)
     
-    conv7 = Convolution2D(1, (1, 1), activation='softmax')(conv7)
+    conv7 = Convolution2D(4, (1, 1), activation='softmax')(conv7)
     
     unet = Model(inputs=inputs, outputs=conv7)
     

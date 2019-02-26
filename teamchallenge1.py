@@ -47,10 +47,10 @@ def main():
     ES_centers = centerROI(gt_ES_ims)
 
     # preprocess images to same x,y dimensions
-    ED_ims_red = reduceDimensions(images=ED_ims, dims=[144,144])
-    ES_ims_red = reduceDimensions(images=ES_ims, dims=[144,144])
-    gt_ED_ims_red = reduceDimensions(images=gt_ED_ims, dims=[144,144])
-    gt_ES_ims_red = reduceDimensions(images=gt_ES_ims, dims=[144,144])
+    ED_ims_red = reduceDimensions(images=ED_ims, dims=[144,144], centers = ED_centers)
+    ES_ims_red = reduceDimensions(images=ES_ims, dims=[144,144], centers = ES_centers)
+    gt_ED_ims_red = reduceDimensions(images=gt_ED_ims, dims=[144,144],centers = ED_centers)
+    gt_ES_ims_red = reduceDimensions(images=gt_ES_ims, dims=[144,144],centers = ES_centers)
     
     # display some slices    
     displaySlices(ED_ims_red, patient=77)
@@ -249,10 +249,22 @@ def reduceDimensions(images, dims, centers):
     for i in range(len(images)):
         xmid = int(centers[i][1]) #int(np.ceil(images[i].shape[2]/2))
         ymid = int(centers[i][0])#int(np.ceil(images[i].shape[1]/2))
-        y1 = ymid - int(dims[0]/2)
-        y2 = ymid + int(dims[0]/2)
-        x1 = xmid - int(dims[1]/2)
-        x2 = xmid + int(dims[1]/2)
+        if xmid <= dims[1]/2:
+            dif = round(dims[1]/2 - xmid)
+            x1 = xmid - int(dims[1]/2) + dif
+            x2 = xmid + int(dims[1]/2) + dif
+
+            
+        elif ymid <= dims[0]/2:
+            dif = round(dims[0]/2 - ymid)
+            y1 = ymid - int(dims[0]/2) + dif
+            y2 = ymid + int(dims[0]/2) + dif
+        else:
+
+            y1 = ymid - int(dims[0]/2)
+            y2 = ymid + int(dims[0]/2)
+            x1 = xmid - int(dims[1]/2)
+            x2 = xmid + int(dims[1]/2)
 
         im = images[i]
         images_red[i] = im[:,y1:y2,x1:x2]

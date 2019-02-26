@@ -41,6 +41,10 @@ def main():
     #Normalisation # nog even waarde tussen 0 , 1 doen nu is het I/sd dus waardes zijn nog wel hoger dan 1(max 5)
     normalize(scans, ED_ims)
     normalize(scans, ES_ims)
+    
+    #getcropping centers
+    ED_centers = centerROI(gt_ED_ims)
+    ES_centers = centerROI(gt_ES_ims)
 
     # preprocess images to same x,y dimensions
     ED_ims_red = reduceDimensions(images=ED_ims, dims=[144,144])
@@ -122,12 +126,22 @@ def normalize(scans , images):
         
 def centerROI(gt_images):
     centers = []
-    for i in range(len(gt_images[0])):
-        for j in range(len(gt_images[1])):
+    for i in range(len(gt_images)):
+        sumy = 0
+        sumx = 0 
+        div = len(gt_images[i])
+        for j in range(len(gt_images[i])):
+       
             im = gt_images[i][j]
             im[im>1] = 1
             center=ndimage.measurements.center_of_mass(im)
-            centers.append(center)
+            if np.isnan(center[0]) == False or np.isnan(center[1]) == False:
+                sumy = sumy + center[0]
+                sumx = sumx + center[1]
+            else:
+                div = div - 1
+        centers.append((np.ceil(sumy/div),np.ceil(sumx/div)))
+    return centers
             
         
      
@@ -229,12 +243,12 @@ def computeRefEF(gt_ED_ims, gt_ES_ims, spacings, patient):
     return
 
 # reduces x and y dimensions, keeps z the same
-def reduceDimensions(images, dims):
+def reduceDimensions(images, dims, centers):
     images_red = np.empty_like(images)
     # for every image in the list
     for i in range(len(images)):
-        xmid = int(np.ceil(images[i].shape[2]/2))
-        ymid = int(np.ceil(images[i].shape[1]/2))
+        xmid = int(centers[i][1]) #int(np.ceil(images[i].shape[2]/2))
+        ymid = int(centers[i][0])#int(np.ceil(images[i].shape[1]/2))
         y1 = ymid - int(dims[0]/2)
         y2 = ymid + int(dims[0]/2)
         x1 = xmid - int(dims[1]/2)
@@ -245,6 +259,7 @@ def reduceDimensions(images, dims):
         
         #print(images_red[i].shape)
     return images_red
+
 
 def get_unet_2D(img_rows, img_cols):
     inputs = Input(shape=(img_rows, img_cols, 1)) #(batch, dim1, dim2, channels)
@@ -289,4 +304,4 @@ def get_unet_2D(img_rows, img_cols):
     
     return unet
 
-main()
+#main()

@@ -31,15 +31,14 @@ def main():
     trainnetwork = True
     trainingsetsize = 0.8
     testsetsize = 0.2
-    nr_epochs = 200
-    minibatchsize = 1
+    nr_epochs = 50
+    minibatchsize = 8
     
     # train on 2D or 3D images
     dimensions = 2
     
     # load all images
     ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings = loadImages(paths)
-    
     
     # take test samples away so no training will be done on those (e.g. 20% of all samples for testing, other 80% for training and validation)
     testsamples = int(np.ceil(ED_ims.shape[0]*testsetsize))
@@ -71,7 +70,10 @@ def main():
 #    print(minval.dtype)
 #
 #    for i in range(len(allimages_training)):
-#        allimages_training[i] *= int(255)/(maxval-minval)
+#        im = allimages_training[i].astype(float)
+#        im *= 255/(maxval-minval)
+#        im = im.astype(int)
+#        allimages_training[i] = im
 #        print(np.max(allimages_training[i]))
 #        print(np.min(allimages_training[i]))
     
@@ -98,50 +100,44 @@ def main():
         allimages_valid_red = reduceDimensions(images=allimages_valid, dims=[144,144], centers=valid_centers)
         gt_allimages_valid_red = reduceDimensions(images=gt_allimages_valid, dims=[144,144], centers=valid_centers)
 
+        
         # display some slices    
-        displaySlices(allimages_train_red, patient=77)
+        #displaySlices(allimages_train_red, patient=77)
     
         # display reference segmentations over slices
-        displayReferenceSegmentations(allimages_train_red, gt_allimages_train_red, patient=77)
+        #displayReferenceSegmentations(allimages_train_red, gt_allimages_train_red, patient=77)
     
         # compute reference ejection fraction
         #computeRefEF(gt_ED_ims_red, gt_ES_ims_red, spacings, patient=77)
         
-        allimages_train_red = np.vstack(allimages_train_red) # (1189, 144, 144)
-        gt_allimages_train_red = np.vstack(gt_allimages_train_red) # (1189, 144, 144)
-        allimages_valid_red = np.vstack(allimages_valid_red) # (323, 144, 144)
-        gt_allimages_valid_red = np.vstack(gt_allimages_valid_red) # (323, 144, 144)
         
+        # convert list of arrays to array
+        allimages_train_red = np.concatenate(allimages_train_red, axis=0) # (1189, 144, 144)
+        gt_allimages_train_red = np.concatenate(gt_allimages_train_red, axis=0) # (1189, 144, 144)
+        allimages_valid_red = np.concatenate(allimages_valid_red, axis=0) # (323, 144, 144)
+        gt_allimages_valid_red = np.vstack(gt_allimages_valid_red) # (323, 144, 144)
+
         # need extra dimension so input is (image, rows, cols, channels)
         allimages_train_red = np.expand_dims(allimages_train_red, axis=3)
         allimages_valid_red = np.expand_dims(allimages_valid_red, axis=3)
         
-        #print(gt_allimages_train_red[1])
-        #plt.imshow(gt_allimages_train_red[1])
-        
         # one-hot encode the labels
-        gt_allimages_train_red = to_categorical(gt_allimages_train_red, num_classes=4)
-        gt_allimages_valid_red = to_categorical(gt_allimages_valid_red, num_classes=4)
-        
-        
-        for i in range(gt_allimages_train_red.shape[0]):
-            print(np.unique(gt_allimages_train_red[i]))
-        
-      
-        
+        gt_allimages_train_red = to_categorical(gt_allimages_train_red)
+        gt_allimages_valid_red = to_categorical(gt_allimages_valid_red)
+         
         # initialize network
-        #unet_2D = get_unet_2D(144,144)
-        #unet_2D.summary()
+        unet_2D = get_unet_2D(144,144)
+        unet_2D.summary()
       
-        
-        
-        
-#        if trainnetwork:
-#            hist = unet_2D.fit(Xtrain, Ytrain, batch_size=minibatchsize, epochs=nr_epochs, validation_data=(Xvalid, Yvalid), verbose=1, shuffle=True)
-#            print(hist.history.keys())
-#            unet_2D.save(networkpath_2D)
-#        else:
-#            unet_2D = keras.models.load_model(networkpath_2D)
+        if trainnetwork:
+            early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, verbose=0, mode='min')
+            hist = unet_2D.fit(allimages_train_red, gt_allimages_train_red, batch_size=minibatchsize, epochs=nr_epochs, validation_data=(allimages_valid_red, gt_allimages_valid_red), callbacks=[early_stopping], verbose=1, shuffle=True)
+            print(hist.history.keys())
+            unet_2D.save(networkpath_2D)
+            
+            visualizeTraining(hist)
+        else:
+            unet_2D = keras.models.load_model(networkpath_2D)
     
     
         return
@@ -181,43 +177,35 @@ def main():
         unet_3D = get_unet_3D(maxdims[0], maxdims[1], maxdims[2])
         unet_3D.summary()
     
+        if trainnetwork:
+            hist = unet_3D.fit(allimages_train_padded, gt_allimages_train_padded, batch_size=minibatchsize, epochs=nr_epochs, validation_data=(allimages_valid_padded, gt_allimages_valid_padded), verbose=1, shuffle=True)
+            print(hist.history.keys())
+            unet_3D.save(networkpath_3D)
+            
+            visualizeTraining(hist)
+        else:
+            unet_3D = keras.models.load_model(networkpath_3D)
     
-    
-#    # need extra dimension for channels for network training
-#    allimages_train = np.expand_dims(allimages_train, axis=4)
-#    allimages_valid = np.expand_dims(allimages_valid, axis=4)
-#    
-#    print(allimages_train.shape)
-#    print(allimages_valid.shape)
-#    
-#    # one-hot encode the labels    
-#    gt_allimages_train = to_categorical(gt_allimages_train, num_classes=4)
-#    gt_allimages_valid = to_categorical(gt_allimages_valid, num_classes=4)
-#    
-#    print(gt_allimages_train.shape)
-#    print(gt_allimages_valid.shape)
-    
-    # initialize network, with input size (None, None, None) because of the variable input dimensions
-#    unet_3D = get_unet_3D(None, None, None)
-#    unet_3D.summary()
-#    
-##    hist = unet_3D.fit_generator(generator(allimages_train, gt_allimages_train), validation_data=(allimages_valid, gt_allimages_valid), steps_per_epoch=len(allimages_train), validation_steps=len(allimages_valid), epochs=nr_epochs, verbose=1, shuffle=True)
-#    hist = unet_3D.fit(allimages_train, gt_allimages_train, batch_size=minibatchsize, epochs=nr_epochs, validation_data=(allimages_valid, gt_allimages_valid), verbose=1, shuffle=True)
-#    print(hist.history.keys())
-#    unet_3D.save(networkpath_3D)
-    
-#    # initialize network
-#    unet_2D = get_unet_2D(144,144)
-#    unet_2D.summary()
-#    
-#    if trainnetwork:
-#        hist = unet_2D.fit(Xtrain, Ytrain, batch_size=minibatchsize, epochs=nr_epochs, validation_data=(Xvalid, Yvalid), verbose=1, shuffle=True)
-#        print(hist.history.keys())
-#        unet_2D.save(networkpath_2D)
-#    else:
-#        unet_2D = keras.models.load_model(networkpath_2D)
-#    
     return
+
+def visualizeTraining(hist):
+    # Plot training & validation accuracy values
+    plt.plot(hist.history['acc'])
+    plt.plot(hist.history['val_acc'])
+    plt.title('Model accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.show()
+    
+    # Plot training & validation loss values
+    plt.plot(hist.history['loss'])
+    plt.plot(hist.history['val_loss'])
+    plt.title('Model loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.show()
 
 def normalize(scans, images):
     

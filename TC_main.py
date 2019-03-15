@@ -49,9 +49,9 @@ def main():
     #     plt.figure()
     #     plt.imshow(train_ims[i][5,:,:], cmap='gray')
     # plt.show()
-
-    ########## needs to be done
-    train_ims = resample(train_ims)
+    spacingvector = [avgspacing, avgspacing, spacings[0][2]]
+    train_ims = resample(train_ims, spacingvector)
+    
 
     # remove outliers from the images
     train_ims = removeOutliers(train_ims)

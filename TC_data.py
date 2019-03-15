@@ -64,9 +64,11 @@ def loadImages(paths):
     print("Images loaded.")
     return ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings
 
-def resample(images):
-
-
+def resample(images, spacing):
+    for i in range(len(images)):
+        images[i] = sitk.GetImageFromArray(images[i])
+        images[i].SetSpacing(spacing)
+        images[i] = sitk.GetArrayFromImage(images[i])
     return(images)
 
 def removeOutliers(images):

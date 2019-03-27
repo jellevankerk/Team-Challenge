@@ -188,23 +188,32 @@ def main():
             test_gt_ES_ims = np.asarray(test_gt_ES_ims)
             test_spacings = np.asarray(test_spacings)
 
+            # # save shape for reconstruction of 3D images later
+            # test_ED_shape = copy.deepcopy(test_ED_ims)
+            # test_ES_shape = copy.deepcopy(test_ES_ims)
+            # test_gt_ED_shape = copy.deepcopy(test_gt_ED_ims)
+            # test_gt_ES_shape = copy.deepcopy(test_gt_ES_ims)
+
+            # test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings = prepareTestData(test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings, cropdims)
+
+
+            # normalize the images
+            test_ED_ims = normalize(test_ED_ims)
+            test_ES_ims = normalize(test_ES_ims)
+
+            CoM_test_ED_ims = center_of_mass(test_gt_ED_ims)
+            test_ED_ims = reduceDimensions(test_ED_ims, cropdims, CoM_test_ED_ims)
+            test_gt_ED_ims = reduceDimensions(test_gt_ED_ims, cropdims, CoM_test_ED_ims)
+
+            CoM_test_ES_ims = center_of_mass(test_gt_ES_ims)
+            test_ES_ims = reduceDimensions(test_ES_ims, cropdims, CoM_test_ES_ims)
+            test_gt_ES_ims = reduceDimensions(test_gt_ES_ims, cropdims, CoM_test_ES_ims)
+
             # save shape for reconstruction of 3D images later
             test_ED_shape = copy.deepcopy(test_ED_ims)
             test_ES_shape = copy.deepcopy(test_ES_ims)
             test_gt_ED_shape = copy.deepcopy(test_gt_ED_ims)
             test_gt_ES_shape = copy.deepcopy(test_gt_ES_ims)
-
-            # test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings = prepareTestData(test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings, cropdims)
-
-            # normalize the images
-            test_ED_ims = normalize(test_ED_ims)
-            test_ES_ims = normalize(test_ES_ims)
-            CoM_test_ED_ims = center_of_mass(test_gt_ED_ims)
-            test_ED_ims = reduceDimensions(test_ED_ims, cropdims, CoM_test_ED_ims)
-            test_gt_ED_ims = reduceDimensions(test_gt_ED_ims, cropdims, CoM_test_ED_ims)
-            CoM_test_ES_ims = center_of_mass(test_gt_ES_ims)
-            test_ES_ims = reduceDimensions(test_ES_ims, cropdims, CoM_test_ES_ims)
-            test_gt_ES_ims = reduceDimensions(test_gt_ES_ims, cropdims, CoM_test_ES_ims)
 
             test_ED_ims = create2DArray(test_ED_ims)
             test_ES_ims = create2DArray(test_ES_ims)
@@ -216,6 +225,17 @@ def main():
 
             test_gt_ED_ims = to_categorical(test_gt_ED_ims, num_classes=4)
             test_gt_ES_ims = to_categorical(test_gt_ES_ims, num_classes=4)
+
+            print(test_gt_ES_ims.shape)
+            for i in range(5):
+                im = test_gt_ES_ims[i,:,:,:]
+                for label in range(im.shape[2]):
+                    image = im[:,:,label]
+                    print(np.unique(image))
+                    plt.figure()
+                    plt.imshow(image[:,:])
+
+            plt.show()
 
             # make predictions for the test images
             pred_ED = unet_2D.predict(test_ED_ims, batch_size=batchsize, verbose=1)
@@ -238,6 +258,11 @@ def main():
                     im = np.where(im >= 0.5, 1, 0)
                     image[:,:,label] = im
                     pred_ES[i,:,:,:] = image
+
+            print(test_ED_shape.shape)
+            print(test_gt_ED_shape.shape)
+            print(test_ES_shape.shape)
+            print(test_gt_ES_shape.shape)
 
             # reconstruct to 3D images in order to be able to calculate the EF
             ED_images_3D = np.empty_like(test_ED_shape)
@@ -264,8 +289,10 @@ def main():
             print(gt_ED_images_3D.shape)
             print(gt_ES_images_3D.shape)
 
+            asd
+
             # for i in range(5):
-            #     im = ED_images_3D[i]
+            #     im = gt_ES_images_3D[i]
             #     for label in range(im.shape[3]):
             #         image = im[:,:,:,label]
             #         print(np.unique(image))
@@ -274,26 +301,96 @@ def main():
             #
             # plt.show()
 
-            for i in range(len(ED_images_3D)):
-                ED_image = ED_images_3D[i]
-                gt_ED_image = gt_ED_images_3D[i]
 
+            #tijdelijk
+            # images_3D = np.concatenate((ED_images_3D, ES_images_3D), axis=0)
+            # gt_images_3D = np.concatenate((gt_ED_images_3D, gt_ES_images_3D), axis=0)
+            # ED_images_3D = images_3D
+            # gt_ED_images_3D = gt_images_3D
+
+            softdicelist0, softdicelist1, softdicelist2, softdicelist3 = [], [], [], []
+            multiclass_softdicelist = []
+            for i in range(len(ES_images_3D)):
+                ES_image = ES_images_3D[i]
+                gt_ES_image = gt_ES_images_3D[i]
+
+                multiclass_softdice = 0
                 # calculate dice per channel for each 3D volume
-                for label in range(ED_image.shape[3]):
-                    softdice = round(softdice_coef_np(gt_ED_image[:,:,:,label], ED_image[:,:,:,label]),4)
+                for label in range(ES_image.shape[3]):
+                    softdice = round(softdice_coef_np(gt_ES_image[:,:,:,label], ES_image[:,:,:,label]),4)
                     print("softdice {} for label {}".format(softdice, label))
 
-                    # average dice per image, min/max
-                    # average dice for whole test set, min/max
+                    # for i in range(gt_ED_image.shape[0]):
+                    #     gt = gt_ED_image[i,:,:,label]
+                    #     ED = ED_image[i,:,:,label]
+                    #     plt.figure()
+                    #     plt.imshow(gt)
+                    #     plt.figure()
+                    #     plt.imshow(ED)
+
+
+                    multiclass_softdice += softdice
+
+                    if label == 0:
+                        softdicelist0.append(softdice)
+                    elif label == 1:
+                        softdicelist1.append(softdice)
+                    elif label == 2:
+                        softdicelist2.append(softdice)
+                    elif label == 3:
+                        softdicelist3.append(softdice)
+
+                # add multiclass softdice to list
+                multiclass_softdicelist.append(multiclass_softdice)
+
+
+
+            # average dice per image, min/max
+            # average dice for whole test set, min/max
+            print("Minimum softdice for channel 0 is {}".format(np.min(softdicelist0)))
+            print("Maximum softdice for channel 0 is {}".format(np.max(softdicelist0)))
+            print("Average softdice for channel 0 is {}".format(np.mean(softdicelist0)))
+
+            print("Minimum softdice for channel 1 is {}".format(np.min(softdicelist1)))
+            print("Maximum softdice for channel 1 is {}".format(np.max(softdicelist1)))
+            print("Average softdice for channel 1 is {}".format(np.mean(softdicelist1)))
+
+            print("Minimum softdice for channel 2 is {}".format(np.min(softdicelist2)))
+            print("Maximum softdice for channel 2 is {}".format(np.max(softdicelist2)))
+            print("Average softdice for channel 2 is {}".format(np.mean(softdicelist2)))
+
+            print("Minimum softdice for channel 3 is {}".format(np.min(softdicelist3)))
+            print("Maximum softdice for channel 3 is {}".format(np.max(softdicelist3)))
+            print("Average softdice for channel 3 is {}".format(np.mean(softdicelist3)))
+
+            print("Multiclass softdices {}".format(multiclass_softdicelist))
+            print("Multiclass softdices divided by 4 {}".format(np.array(multiclass_softdicelist) / 4))
+            print("Minimum multiclass softdice {}".format(np.min(multiclass_softdicelist)))
+            print("Maximum multiclass softdice {}".format(np.max(multiclass_softdicelist)))
+            print("Average multiclass softdice {}".format(np.mean(multiclass_softdicelist)))
+            print("Average multiclass softdice divided by 4 is {}".format((np.mean(multiclass_softdicelist))/4))
+
+
+            print(test_ED_shape.shape)
+            print(ED_images_3D.shape)
+            print(test_ED_shape[0].shape)
+            print(ED_images_3D[0].shape)
+
+            # plt.figure()
+            # plt.imshow(ED_images_3D[6][5,:,:,3])
+            # plt.show()
 
             # functie maken die een 3D plaatje plot met subplot per slice
             # evt erbij dat de verschillende classes zichtbaar zijn
-            # visualize3Dimage(image)
-
+            # for i in range(19):
+            #     visualize3Dimage(ES_images_3D[i], test_ES_shape[i])
+            #
+            #
+            # plt.show()
             # EF uitrekenen
 
-
-
+            # for i in range(len(gt_images_3D)):
+                # print(np.unique(gt_images_3D[i]))
 
 
 

@@ -2,8 +2,6 @@ import SimpleITK as sitk
 import copy
 import numpy as np
 
-
-
 from scipy import ndimage
 from keras import backend as K
 

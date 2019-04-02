@@ -5,26 +5,8 @@ import numpy as np
 from scipy import ndimage
 from keras import backend as K
 
-# import warnings
-# warnings.filterwarnings('error')
-
-def generalized_dice_coeff(y_true, y_pred):
-    n_el = 1
-    for dim in y_train.shape:
-        n_el *= int(dim)
-        n_cl = y_train.shape[-1]
-    w = K.zeros(shape=(n_cl,))
-    w = (K.sum(y_true, axis=(0,1,2)))/(n_el)
-    w = 1/(w**2+0.000001)
-    numerator = y_true*y_pred
-    numerator = w*K.sum(numerator,(0,1,2))
-    numerator = K.sum(numerator)
-    denominator = y_true+y_pred
-    denominator = w*K.sum(denominator,(0,1,2))
-    denominator = K.sum(denominator)
-    return (1+2*numerator)/(1+denominator)
-
 def tversky_loss(y_true, y_pred):
+    # alpha=beta=0.5 for (soft)dice
     alpha = 0.5
     beta  = 0.5
 
@@ -42,24 +24,6 @@ def tversky_loss(y_true, y_pred):
 
     Ncl = K.cast(K.shape(y_true)[-1], 'float32')
     return Ncl-T
-
-# def generalized_dice_coeff(y_true, y_pred):
-#     Ncl = y_pred.shape[-1]
-#     w = K.zeros(shape=(Ncl,))
-#     w = K.sum(y_true, axis=(0,1,2))
-#     w = 1/(w**2+0.000001)
-#     # Compute gen dice coef:
-#     numerator = y_true*y_pred
-#     numerator = w*K.sum(numerator,(0,1,2))
-#     numerator = K.sum(numerator)
-#
-#     denominator = y_true+y_pred
-#     denominator = w*K.sum(denominator,(0,1,2))
-#     denominator = K.sum(denominator)
-#
-#     gen_dice_coef = (1+2*numerator)/(1+denominator)
-#
-#     return gen_dice_coef
 
 def softdice_coef(y_true, y_pred):
 
@@ -89,50 +53,6 @@ def softdice_loss(y_true, y_pred):
 def softdice_multilabel_loss(y_true, y_pred):
 
     return 4 - softdice_coef_multilabel(y_true, y_pred, num_labels=4)
-
-def get_weightings(images):
-    # (160,) met elke index (z,y,x)
-
-    # find out how much each class is represented
-    sum0, sum1, sum2, sum3 = 0, 0, 0, 0
-    for i in range(len(images)):
-        sum0 += np.sum(images[i] == 0)
-        sum1 += np.sum(images[i] == 1)
-        sum2 += np.sum(images[i] == 2)
-        sum3 += np.sum(images[i] == 3)
-
-    totalpixels = sum0+sum1+sum2+sum3
-
-    w0 = np.round(1/(sum0/totalpixels),2)
-    w1 = np.round(1/(sum1/totalpixels),2)
-    w2 = np.round(1/(sum2/totalpixels),2)
-    w3 = np.round(1/(sum3/totalpixels),2)
-
-    weightings = [w0, w1, w2, w3]
-
-    return weightings
-
-def image_generator(train_ims, gt_train_ims, batchsize, mode="train", aug=None):
-    num = 0
-    while True:
-        images = []
-        gt_images = []
-        # keep looping until we reach batch size
-        while len(images) < batchsize:
-            image = train_ims[num]
-            gt_image = gt_train_ims[num]
-
-            # make extra dimension for feature channels
-            image = np.expand_dims(image, axis=3)
-
-            # one-hot encode the labels
-            gt_image = to_categorical(gt_image, num_classes=4)
-
-            images.append(image)
-            gt_images.append(gt_image)
-            num += 1
-
-        yield(np.array(images), np.array(gt_images))
 
 def loadImages(patient):
     with open('Data/{}/Info.cfg'.format(patient), 'r') as file:
@@ -169,74 +89,10 @@ def create2DArray(images):
     for i in range(len(images)):
         im_3D = images[i]
         for j in range(im_3D.shape[0]):
-            im_2D = im_3D[0,:,:]
+            im_2D = im_3D[j,:,:]
             ims.append(im_2D)
     ims = np.array(ims)
     return ims
-
-def shuffleArray(array, seed):
-    np.random.seed(seed)
-    # shuffles an array with a certain seed
-    shape = array.shape
-    array = array.ravel()
-    np.random.shuffle(array)
-    array = array.reshape(shape)
-    return array
-
-# def loadImages(paths):
-#     print("Loading images...")
-#     ED_paths, ES_paths = [], []
-#
-#     # get paths for first frame
-#     for i in range(0,len(paths),4):
-#         ED_paths.append(paths[i])
-#
-#     # get paths for last frame
-#     for i in range(2,len(paths),4):
-#         ES_paths.append(paths[i])
-#
-#     # get paths for first frame ground truth
-#     gt_ED_paths = copy.deepcopy(ED_paths)
-#     for i in range(len(ED_paths)):
-#         gt_ED_paths[i] = ED_paths[i].replace('.nii.gz', '_gt.nii.gz')
-#
-#     # get paths for last frame ground truth
-#     gt_ES_paths = copy.deepcopy(ES_paths)
-#     for i in range(len(ES_paths)):
-#         gt_ES_paths[i] = ES_paths[i].replace('.nii.gz', '_gt.nii.gz')
-#
-#     ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings = [], [], [], [], []
-#
-#     for i in range(len(ED_paths)):
-#         # load images
-#         ED_im = sitk.ReadImage(ED_paths[i])
-#         ES_im = sitk.ReadImage(ES_paths[i])
-#         ED_gt_im = sitk.ReadImage(gt_ED_paths[i])
-#         ES_gt_im = sitk.ReadImage(gt_ES_paths[i])
-#
-#         # add spacings to a list
-#         spacings.append(ED_im.GetSpacing())
-#
-#         # make np array of the images
-#         ED_im = sitk.GetArrayFromImage(ED_im)
-#         ES_im = sitk.GetArrayFromImage(ES_im)
-#         gt_ED_im = sitk.GetArrayFromImage(ED_gt_im)
-#         gt_ES_im = sitk.GetArrayFromImage(ES_gt_im)
-#
-#         ED_ims.append(ED_im)
-#         ES_ims.append(ES_im)
-#         gt_ED_ims.append(gt_ED_im)
-#         gt_ES_ims.append(gt_ES_im)
-#
-#     # make np array of the lists of arrays
-#     ED_ims = np.asarray(ED_ims)
-#     ES_ims = np.asarray(ES_ims)
-#     gt_ED_ims = np.asarray(gt_ED_ims)
-#     gt_ES_ims = np.asarray(gt_ES_ims)
-#     spacings = np.asarray(spacings)
-#
-#     print("Images loaded.")
-#     return ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings
 
 def resample(images, spacings):
     # first get the average x (and y) spacing of all images rounded to 1 decimal
@@ -268,10 +124,10 @@ def removeOutliers(images):
     return images
 
 def normalize(images):
-    # normalize images to range of [0,1]
+    # normalize images to range of zero mean, unit variance
     for i in range(len(images)):
         im = images[i]
-        im = (im - np.min(im)) / (np.max(im) - np.min(im))
+        im = (im - np.mean(im)) / np.std(im)
         images[i] = im
 
     return images
@@ -286,15 +142,7 @@ def center_of_mass(gt_images):
 
         for j in range(len(gt_images[i])):
             im = gt_images[i][j]
-
-            # when the gt slice is empty, measuring the center_of_mass gives a warning
-            # this can be ignored
-            # try:
             center=ndimage.measurements.center_of_mass(im)
-            #     warnings.warn(Warning())
-            # except Warning:
-            #     pass
-
             if np.isnan(center[0]) == False or np.isnan(center[1]) == False:
                 sumy = sumy + center[0]
                 sumx = sumx + center[1]
@@ -303,7 +151,6 @@ def center_of_mass(gt_images):
                 div = div - 1
 
         centers.append((np.ceil(sumy/div),np.ceil(sumx/div)))
-
     return centers
 
 def reduceDimensions(images, dims, centers):
@@ -330,7 +177,6 @@ def reduceDimensions(images, dims, centers):
 
         im = images[i]
         images_red[i] = im[:,y1:y2,x1:x2]
-
     return images_red
 
 def to_categorical(y, num_classes=None):

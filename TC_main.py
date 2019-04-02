@@ -3,6 +3,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+import csv
+from contextlib import redirect_stdout
 
 from keras.utils import to_categorical
 import keras
@@ -20,7 +22,7 @@ def main():
     evaluatenetwork = True
 
     # networkpath only used when trainnetwork = False but evaluatenetwork = True
-    networkpath = r'Networks/network_2D_epochs=1000_bs=1_channels=64-512.h5'
+    networkpath = r'Networks/network_2D_epochs=50_bs=1_channels=64-512'
 
     trainingsetsize = 0.8 # part of data to be used for training
     validationsetsize = 0.2 # part of train set to be used for validation
@@ -81,9 +83,6 @@ def main():
         train_ims = reduceDimensions(train_ims, cropdims, CoM_ims)
         gt_ims = reduceDimensions(gt_ims, cropdims, CoM_ims)
 
-        # get weightings according to occurrence of classes
-        #weightings = get_weightings(gt_ims)
-
         # now dataset can be split into validation and training set
         # use vstack to get an array of the 2D slices
         valsamples = int(np.ceil(train_ims.shape[0]*validationsetsize))
@@ -100,26 +99,6 @@ def main():
         gt_train_ims = create2DArray(gt_train_ims)
         gt_val_ims = create2DArray(gt_val_ims)
 
-        # print(train_ims.shape) #(160,)
-
-        # shuffle the dataset for training
-        # same seed so ground truth is shuffled the same way
-        # seed=1
-        # train_ims = shuffleArray(train_ims, seed)
-        # gt_train_ims = shuffleArray(gt_train_ims, seed)
-        # val_ims = shuffleArray(val_ims, seed)
-        # gt_val_ims = shuffleArray(gt_val_ims, seed)
-
-        # only take certain class for training
-        # label = 3
-        # gt_train_ims = np.where(gt_train_ims == label, 1, 0)
-
-        # print(np.unique(gt_train_ims))
-        # print(gt_train_ims.shape) #(1224,144,144)
-        #
-        # plt.imshow(gt_train_ims[6][:,:])
-        # plt.show()
-
         # need extra dimension for feature channels
         train_ims = np.expand_dims(train_ims, axis=3)
         val_ims = np.expand_dims(val_ims, axis=3)
@@ -130,36 +109,27 @@ def main():
 
         # initialize network
         unet_2D = get_unet_2D(cropdims[0], cropdims[1])
-        # unet_2D = get_unet_2D(None, None)
         unet_2D.summary()
-
-        # num_train_images = len(train_ims)
-        # num_val_images = len(val_ims)
 
         if trainnetwork:
             # get nr of channels of model to put in network filename
             nr_channels_start = unet_2D.layers[1].output_shape[3]
-            nr_channels_end = unet_2D.layers[12].output_shape[3]
-            networkpath = r'Networks/network_{}D_epochs={}_bs={}_channels={}-{}.h5'.format(dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end)
-            print(networkpath)
+            nr_channels_end = unet_2D.layers[12].output_shape[3] # DIT AANPASSEN
+            networkpath = r'Networks/network_{}D_epochs={}_bs={}_channels={}-{}'.format(dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end)
 
-            early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10000, verbose=0, mode='min')
-            hist = unet_2D.fit(train_ims, gt_train_ims, batch_size=batchsize, epochs=num_epochs, validation_data=(val_ims, gt_val_ims), verbose=1, shuffle=True)
+            # write model summary to file
+            with open(r'{}_model.txt'.format(networkpath), 'w') as f:
+                with redirect_stdout(f):
+                    unet_2D.summary()
 
-            # training_gen = image_generator(train_ims, gt_train_ims, batchsize, mode="train", aug=None)
-            # valid_gen = image_generator(val_ims, gt_val_ims, batchsize, mode="train", aug=None)
-            #
-            # hist = unet_2D.fit_generator(
-            #     training_gen,
-            #     steps_per_epoch=num_train_images//batchsize,
-            #     validation_data=valid_gen,
-            #     validation_steps=num_val_images//batchsize,
-            #     epochs=num_epochs)
+            early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, verbose=0, mode='min')
+            csv_logger = keras.callbacks.CSVLogger(r'{}_log.csv'.format(networkpath), separator='|', append=False)
 
+            # train and save model
+            hist = unet_2D.fit(train_ims, gt_train_ims, batch_size=batchsize, epochs=num_epochs, validation_data=(val_ims, gt_val_ims), callbacks=[csv_logger], verbose=1, shuffle=True)
+            unet_2D.save(r'{}.h5'.format(networkpath))
 
-            print(hist.history.keys())
-            unet_2D.save(networkpath)
-
+            # plot loss and multilabel software of the training
             visualizeTraining(hist, dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end)
 
         # evaluate the network on test data
@@ -167,8 +137,9 @@ def main():
 
             #load network
             keras.backend.clear_session()
-            unet_2D = keras.models.load_model(networkpath, custom_objects={'softdice_coef_multilabel': softdice_coef_multilabel, 'softdice_multilabel_loss': softdice_multilabel_loss, 'tversky_loss': tversky_loss})
+            unet_2D = keras.models.load_model(r'{}.h5'.format(networkpath), custom_objects={'softdice_coef_multilabel': softdice_coef_multilabel, 'softdice_multilabel_loss': softdice_multilabel_loss, 'tversky_loss': tversky_loss})
 
+            print("Preparing test data...")
             test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings = [], [], [], [], []
             # do for every patient
             for i in range(len(test_patients)):
@@ -187,15 +158,6 @@ def main():
             test_gt_ED_ims = np.asarray(test_gt_ED_ims)
             test_gt_ES_ims = np.asarray(test_gt_ES_ims)
             test_spacings = np.asarray(test_spacings)
-
-            # # save shape for reconstruction of 3D images later
-            # test_ED_shape = copy.deepcopy(test_ED_ims)
-            # test_ES_shape = copy.deepcopy(test_ES_ims)
-            # test_gt_ED_shape = copy.deepcopy(test_gt_ED_ims)
-            # test_gt_ES_shape = copy.deepcopy(test_gt_ES_ims)
-
-            # test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings = prepareTestData(test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings, cropdims)
-
 
             # normalize the images
             test_ED_ims = normalize(test_ED_ims)
@@ -225,21 +187,12 @@ def main():
 
             test_gt_ED_ims = to_categorical(test_gt_ED_ims, num_classes=4)
             test_gt_ES_ims = to_categorical(test_gt_ES_ims, num_classes=4)
-
-            print(test_gt_ES_ims.shape)
-            for i in range(5):
-                im = test_gt_ES_ims[i,:,:,:]
-                for label in range(im.shape[2]):
-                    image = im[:,:,label]
-                    print(np.unique(image))
-                    plt.figure()
-                    plt.imshow(image[:,:])
-
-            plt.show()
+            print("Test data prepared")
 
             # make predictions for the test images
-            pred_ED = unet_2D.predict(test_ED_ims, batch_size=batchsize, verbose=1)
-            pred_ES = unet_2D.predict(test_ES_ims, batch_size=batchsize, verbose=1)
+            print("Making segmentations...")
+            pred_ED = unet_2D.predict(test_ED_ims, batch_size=batchsize, verbose=0)
+            pred_ES = unet_2D.predict(test_ES_ims, batch_size=batchsize, verbose=0)
 
             # make the segmentations according to the probabilities
             # every class label with probability >= 0.5 gets value of class label (0, 1, 2 or 3)
@@ -258,11 +211,6 @@ def main():
                     im = np.where(im >= 0.5, 1, 0)
                     image[:,:,label] = im
                     pred_ES[i,:,:,:] = image
-
-            print(test_ED_shape.shape)
-            print(test_gt_ED_shape.shape)
-            print(test_ES_shape.shape)
-            print(test_gt_ES_shape.shape)
 
             # reconstruct to 3D images in order to be able to calculate the EF
             ED_images_3D = np.empty_like(test_ED_shape)
@@ -283,136 +231,41 @@ def main():
                 gt_image_3D = test_gt_ES_ims[i:(i+slices),:,:,:]
                 ES_images_3D[i] = image_3D
                 gt_ES_images_3D[i] = gt_image_3D
+            print("Segmentations made")
 
-            print(ED_images_3D.shape) #(20,) met elk (slices, 144, 144, 4)
-            print(ES_images_3D.shape)
-            print(gt_ED_images_3D.shape)
-            print(gt_ES_images_3D.shape)
+            # calculate various results and save to text file
+            # only do this if this hasn't been done yet
+            if not os.path.isfile(r'{}_results.txt'.format(networkpath)):
+                with open(r'{}_results.txt'.format(networkpath), 'w') as text_file:
+                    # calculate various softdices and multiclass softdices and write to text file
+                    print("Saving results...")
+                    saveResults(ED_images_3D, gt_ED_images_3D, text_file, type="ED")
+                    saveResults(ES_images_3D, gt_ES_images_3D, text_file, type="ES")
 
-            asd
+                    # also write resulting EF for both the obtained segmentation as the ground truth to same file
+                    for patient in range(len(ED_images_3D)):
+                        strokevolume_gt, LVEF_gt = calculateEF(gt_ED_images_3D, gt_ES_images_3D, test_spacings, patient)
+                        strokevolume, LVEF = calculateEF(ED_images_3D, ES_images_3D, test_spacings, patient)
+                        print('LV stroke volume is {:.2f} ml and ejection fraction is {:.2f}% for patient {}'.format(strokevolume_gt*0.001, LVEF_gt, patient), file=text_file)
+                        print('LV stroke volume for ground truth is {:.2f} ml and ejection fraction is {:.2f}% for patient {} \n'.format(strokevolume*0.001, LVEF, patient), file=text_file)
+                    print("Results saved")
+                text_file.close()
 
-            # for i in range(5):
-            #     im = gt_ES_images_3D[i]
-            #     for label in range(im.shape[3]):
-            #         image = im[:,:,:,label]
-            #         print(np.unique(image))
-            #         plt.figure()
-            #         plt.imshow(image[5,:,:])
-            #
-            # plt.show()
+            # see if folder to save plots exist, else make it
+            if not os.path.isdir(networkpath):
+                os.mkdir(networkpath)
 
-
-            #tijdelijk
-            # images_3D = np.concatenate((ED_images_3D, ES_images_3D), axis=0)
-            # gt_images_3D = np.concatenate((gt_ED_images_3D, gt_ES_images_3D), axis=0)
-            # ED_images_3D = images_3D
-            # gt_ED_images_3D = gt_images_3D
-
-            softdicelist0, softdicelist1, softdicelist2, softdicelist3 = [], [], [], []
-            multiclass_softdicelist = []
+            # plot and save 3D images for all patients in test set, including overlay of segmentation
+            print("Saving segmentation images...")
+            for i in range(len(ED_images_3D)):
+                savepath = r'{}/test_ED_im_{}.png'.format(networkpath, i)
+                visualize3Dimage(ED_images_3D[i], test_ED_shape[i], savepath)
             for i in range(len(ES_images_3D)):
-                ES_image = ES_images_3D[i]
-                gt_ES_image = gt_ES_images_3D[i]
-
-                multiclass_softdice = 0
-                # calculate dice per channel for each 3D volume
-                for label in range(ES_image.shape[3]):
-                    softdice = round(softdice_coef_np(gt_ES_image[:,:,:,label], ES_image[:,:,:,label]),4)
-                    print("softdice {} for label {}".format(softdice, label))
-
-                    # for i in range(gt_ED_image.shape[0]):
-                    #     gt = gt_ED_image[i,:,:,label]
-                    #     ED = ED_image[i,:,:,label]
-                    #     plt.figure()
-                    #     plt.imshow(gt)
-                    #     plt.figure()
-                    #     plt.imshow(ED)
-
-
-                    multiclass_softdice += softdice
-
-                    if label == 0:
-                        softdicelist0.append(softdice)
-                    elif label == 1:
-                        softdicelist1.append(softdice)
-                    elif label == 2:
-                        softdicelist2.append(softdice)
-                    elif label == 3:
-                        softdicelist3.append(softdice)
-
-                # add multiclass softdice to list
-                multiclass_softdicelist.append(multiclass_softdice)
-
-
-
-            # average dice per image, min/max
-            # average dice for whole test set, min/max
-            print("Minimum softdice for channel 0 is {}".format(np.min(softdicelist0)))
-            print("Maximum softdice for channel 0 is {}".format(np.max(softdicelist0)))
-            print("Average softdice for channel 0 is {}".format(np.mean(softdicelist0)))
-
-            print("Minimum softdice for channel 1 is {}".format(np.min(softdicelist1)))
-            print("Maximum softdice for channel 1 is {}".format(np.max(softdicelist1)))
-            print("Average softdice for channel 1 is {}".format(np.mean(softdicelist1)))
-
-            print("Minimum softdice for channel 2 is {}".format(np.min(softdicelist2)))
-            print("Maximum softdice for channel 2 is {}".format(np.max(softdicelist2)))
-            print("Average softdice for channel 2 is {}".format(np.mean(softdicelist2)))
-
-            print("Minimum softdice for channel 3 is {}".format(np.min(softdicelist3)))
-            print("Maximum softdice for channel 3 is {}".format(np.max(softdicelist3)))
-            print("Average softdice for channel 3 is {}".format(np.mean(softdicelist3)))
-
-            print("Multiclass softdices {}".format(multiclass_softdicelist))
-            print("Multiclass softdices divided by 4 {}".format(np.array(multiclass_softdicelist) / 4))
-            print("Minimum multiclass softdice {}".format(np.min(multiclass_softdicelist)))
-            print("Maximum multiclass softdice {}".format(np.max(multiclass_softdicelist)))
-            print("Average multiclass softdice {}".format(np.mean(multiclass_softdicelist)))
-            print("Average multiclass softdice divided by 4 is {}".format((np.mean(multiclass_softdicelist))/4))
-
-
-            print(test_ED_shape.shape)
-            print(ED_images_3D.shape)
-            print(test_ED_shape[0].shape)
-            print(ED_images_3D[0].shape)
-
-            # plt.figure()
-            # plt.imshow(ED_images_3D[6][5,:,:,3])
-            # plt.show()
-
-            # functie maken die een 3D plaatje plot met subplot per slice
-            # evt erbij dat de verschillende classes zichtbaar zijn
-            # for i in range(19):
-            #     visualize3Dimage(ES_images_3D[i], test_ES_shape[i])
-            #
-            #
-            # plt.show()
-            # EF uitrekenen
-
-            # for i in range(len(gt_images_3D)):
-                # print(np.unique(gt_images_3D[i]))
-
-
-
-
-
-
-
-
-
-            # num_test_images = len(test_ED_ims)
-            # test_gen = image_generator(test_ED_ims, test_gt_ED_ims, batch_size)
-            # preds_ED = unet_2D.predict_generator(test_gen, steps=(num_test_images//batch_size))
-            # test_gen = image_generator(test_ES_ims, test_gt_ES_ims, batch_size)
-            # preds_ES = unet_2D.predict_generator(test_gen, steps=(num_test_images//batch_size))
-
-
-
-
-
+                savepath = r'{}/test_ES_im_{}.png'.format(networkpath, i)
+                visualize3Dimage(ES_images_3D[i], test_ES_shape[i], savepath)
+            print("Segmentation images saved")
 
         return
-
     return
 
 main()

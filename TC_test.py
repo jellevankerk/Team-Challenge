@@ -4,130 +4,73 @@ import matplotlib.pyplot as plt
 
 from TC_data import *
 
-def evaluatePrediction(segmentation, ground_truth):
-    softdicelist = []
-    # for each channel print softdice value and also the mean softdice
-    for label in range(segmentation.shape[2]):
-        seg = segmentation[:,:,label]
-        gt = ground_truth[:,:,label]
+def calculateEF(seg_ED_images_3D, seg_ES_images_3D, test_spacings, patient):
+    spacing = test_spacings[patient]
+    seg_ED_im = seg_ED_images_3D[patient]
+    seg_ES_im = seg_ES_images_3D[patient]
 
-        softdice = softdice_coef_np(seg, gt)
-        print("softdice {} for class {}".format(softdice, label))
-        softdicelist.append(softdice)
+    # take only the LV segmentation
+    seg_ED_im = seg_ED_im[:,:,:,3]
+    seg_ES_im = seg_ES_im[:,:,:,3]
 
-    return softdicelist
+    voxelvolume = spacing[0]*spacing[1]*spacing[2]
+    ED_volume = np.sum(seg_ED_im)*voxelvolume
+    ES_volume = np.sum(seg_ES_im)*voxelvolume
 
+    strokevolume = ED_volume - ES_volume
+    LVEF = (strokevolume/ED_volume)*100
 
-def softdice(segmentation, ground_truth):
-    # output shape should be (144,144,4)
-    softdicelist = []
+    return strokevolume, LVEF
 
-    # for every channel
-    for i in range(segmentation.shape[2]):
-        # check what is the threshold that gives highest softdice value
-        sdsclist = []
-        thresholds = np.linspace(0, 1.0, num=20, endpoint=True)
-        for threshold in thresholds:
-            seg = segmentation[:,:,i]
-            gt = ground_truth[:,:,i]
+def saveResults(images_3D, gt_images_3D, text_file, type="ED"):
+    softdicelist0, softdicelist1, softdicelist2, softdicelist3 = [], [], [], []
+    multiclass_softdicelist = []
+    for i in range(len(images_3D)):
+        image = images_3D[i]
+        gt_image = gt_images_3D[i]
 
-            seg[seg>threshold] = 1
-            seg[seg<=threshold] = 0
+        multiclass_softdice = 0
+        # calculate dice per channel for each 3D volume
+        for label in range(image.shape[3]):
+            softdice = round(softdice_coef_np(gt_image[:,:,:,label], image[:,:,:,label]),4)
+            # print("softdice {} for label {}".format(softdice, label))
 
-            seg = seg.astype('uint8')
-            gt = gt.astype('uint8')
+            multiclass_softdice += softdice
 
-            sdsc = ((2*np.sum(seg & gt))+1) / (np.sum(gt) + np.sum(seg)+1)
-            sdsclist.append(sdsc)
+            if label == 0:
+                softdicelist0.append(softdice)
+            elif label == 1:
+                softdicelist1.append(softdice)
+            elif label == 2:
+                softdicelist2.append(softdice)
+            elif label == 3:
+                softdicelist3.append(softdice)
 
-        # find max softdice for this channel, using different thresholds
-        maxsdsc = np.max(sdsclist)
-        max_index = sdsclist.index(maxsdsc)
-        maxthreshold = thresholds[max_index]
+        # add multiclass softdice to list
+        multiclass_softdicelist.append(round(multiclass_softdice,4))
 
-        softdicelist.append("Max softdice value {} for channel {} found for threshold {}".format(maxsdsc, i, maxthreshold))
-
-
-
-    #sdsc = np.mean(softdicelist)
-    sdsc="test"
-    return softdicelist, sdsc
-
-def prepareTestData(test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings, cropdims):
-    # normalize the images
-    test_ED_ims = normalize(test_ED_ims)
-    test_ES_ims = normalize(test_ES_ims)
-    CoM_test_ED_ims = center_of_mass(test_gt_ED_ims)
-    test_ED_ims = reduceDimensions(test_ED_ims, cropdims, CoM_test_ED_ims)
-    test_gt_ED_ims = reduceDimensions(test_gt_ED_ims, cropdims, CoM_test_ED_ims)
-    CoM_test_ES_ims = center_of_mass(test_gt_ES_ims)
-    test_ES_ims = reduceDimensions(test_ES_ims, cropdims, CoM_test_ES_ims)
-    test_gt_ES_ims = reduceDimensions(test_gt_ES_ims, cropdims, CoM_test_ES_ims)
-
-    test_ED_ims = create2DArray(test_ED_ims)
-    test_ES_ims = create2DArray(test_ES_ims)
-    test_gt_ED_ims = create2DArray(test_gt_ED_ims)
-    test_gt_ES_ims = create2DArray(test_gt_ES_ims)
-
-    test_ED_ims = np.expand_dims(test_ED_ims, axis=3)
-    test_ES_ims = np.expand_dims(test_ES_ims, axis=3)
-
-    test_gt_ED_ims = to_categorical(test_gt_ED_ims, num_classes=4)
-    test_gt_ES_ims = to_categorical(test_gt_ES_ims, num_classes=4)
-
-    return test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings
-
-
-
-def make_predictions(patient):
-
-    # read images
-    ED_im, ES_im, gt_ED_im, gt_ES_im, spacing = loadImages(patient)
-
-    print(ED_im.shape)
-    print(ES_im.shape)
-    print(gt_ED_im.shape)
-    print(gt_ES_im.shape)
-
-    # for every 2D slice in the image
-    for i in range(ED_im.shape[0]):
-        ED_im_2D = ED_im[i,:,:]
-
-
-
-
-    return
-
-def test_image_generator(test_ims, gt_test_ims, batch_size, aug=None):
-    num = 0
-    while True:
-        images = []
-        gt_images = []
-        # keep looping until we reach batch size
-        while len(images) < batch_size:
-            image = test_ims[num]
-            gt_image = gt_train_ims[num]
-
-            # make extra dimension for feature channels
-            image = np.expand_dims(image, axis=3)
-
-            # one-hot encode the labels
-            gt_image = to_categorical(gt_image, num_classes=4)
-
-            images.append(image)
-            gt_images.append(gt_image)
-            num += 1
-
-        yield(np.array(images), np.array(gt_images))
-
-    # now load images for all patients of the training set
-    ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings = [], [], [], [], []
-    for i in range(len(train_patients)):
-        patient = train_patients[i]
-        ED_im, ES_im, gt_ED_im, gt_ES_im, spacing = loadImages(patient)
-
-        ED_ims.append(ED_im)
-        ES_ims.append(ES_im)
-        gt_ED_ims.append(gt_ED_im)
-        gt_ES_ims.append(gt_ES_im)
-        spacings.append(spacing)
+    # with open(r'{}_results.txt'.format(networkpath), 'w') as text_file:
+    print("For {} images: {}".format(type, '\n'), file=text_file)
+    print("Softdices for channel 0: {}".format(softdicelist0), file=text_file)
+    print("Softdices for channel 1: {}".format(softdicelist1), file=text_file)
+    print("Softdices for channel 2: {}".format(softdicelist2), file=text_file)
+    print("Softdices for channel 3: {}{}".format(softdicelist3, '\n'), file=text_file)
+    print("Minimum softdice for channel 0 is {}".format(np.min(softdicelist0)), file=text_file)
+    print("Maximum softdice for channel 0 is {}".format(np.max(softdicelist0)), file=text_file)
+    print("Average softdice for channel 0 is {}{}".format(round(np.mean(softdicelist0),4), '\n'), file=text_file)
+    print("Minimum softdice for channel 1 is {}".format(np.min(softdicelist1)), file=text_file)
+    print("Maximum softdice for channel 1 is {}".format(np.max(softdicelist1)), file=text_file)
+    print("Average softdice for channel 1 is {}{}".format(round(np.mean(softdicelist1),4), '\n'), file=text_file)
+    print("Minimum softdice for channel 2 is {}".format(np.min(softdicelist2)), file=text_file)
+    print("Maximum softdice for channel 2 is {}".format(np.max(softdicelist2)), file=text_file)
+    print("Average softdice for channel 2 is {}{}".format(round(np.mean(softdicelist2),4), '\n'), file=text_file)
+    print("Minimum softdice for channel 3 is {}".format(np.min(softdicelist3)), file=text_file)
+    print("Maximum softdice for channel 3 is {}".format(np.max(softdicelist3)), file=text_file)
+    print("Average softdice for channel 3 is {}{}".format(round(np.mean(softdicelist3),4), '\n'), file=text_file)
+    print("Multiclass softdices {}{}".format(multiclass_softdicelist, '\n'), file=text_file)
+    multiclass_softdicelist_d4 = np.round(np.array(multiclass_softdicelist)/4,4)
+    print("Multiclass softdices divided by 4 {}{}".format(multiclass_softdicelist_d4, '\n'), file=text_file)
+    print("Minimum multiclass softdice {}".format(np.min(multiclass_softdicelist)), file=text_file)
+    print("Maximum multiclass softdice {}".format(np.max(multiclass_softdicelist)), file=text_file)
+    print("Average multiclass softdice {}{}".format(round(np.mean(multiclass_softdicelist),4), '\n'), file=text_file)
+    print("Average multiclass softdice divided by 4 is {}{}".format(round(np.mean(multiclass_softdicelist_d4),4), '\n\n'), file=text_file)

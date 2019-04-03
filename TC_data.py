@@ -6,10 +6,8 @@ from scipy import ndimage
 from keras import backend as K
 
 def tversky_loss(y_true, y_pred):
-    # alpha=beta=0.5 for (soft)dice
-    alpha = 0.5
-    beta  = 0.5
-
+    alpha=0.5
+    beta=0.5
     # ones = K.ones(K.shape(y_true))
     ones = K.ones_like(y_true)
     p0 = y_pred      # proba that voxels are class i

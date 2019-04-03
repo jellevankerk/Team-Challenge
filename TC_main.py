@@ -18,7 +18,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def main():
     # global settings
-    trainnetwork = False
+    trainnetwork = True
     evaluatenetwork = True
 
     # networkpath only used when trainnetwork = False but evaluatenetwork = True
@@ -28,9 +28,20 @@ def main():
     validationsetsize = 0.2 # part of train set to be used for validation
     dimensions = 2
     cropdims = [144, 144]
-
-    num_epochs = 1000
+    num_epochs = 500
     batchsize = 1
+
+    # model settings
+    dropout = True # add dropout layers
+    dropoutpct = 0.2 # amount of dropout
+    activation = 'relu'
+
+    # settings for stochastic gradient descent optimizer
+    lr = 0.001
+    momentum = 0.0
+    decay = 1e-4
+    nesterov = True
+    sgd = SGD(lr, momentum, decay, nesterov)
 
     # make list of all patients
     patients = os.listdir('Data')
@@ -84,7 +95,6 @@ def main():
         gt_ims = reduceDimensions(gt_ims, cropdims, CoM_ims)
 
         # now dataset can be split into validation and training set
-        # use vstack to get an array of the 2D slices
         valsamples = int(np.ceil(train_ims.shape[0]*validationsetsize))
 
         # these are now arrays of 3D images
@@ -108,28 +118,28 @@ def main():
         gt_val_ims = to_categorical(gt_val_ims, num_classes=4)
 
         # initialize network
-        unet_2D = get_unet_2D(cropdims[0], cropdims[1])
+        unet_2D = get_unet_2D(cropdims[0], cropdims[1], sgd, dropoutpct, dropout, activation)
         unet_2D.summary()
 
         if trainnetwork:
             # get nr of channels of model to put in network filename
             nr_channels_start = unet_2D.layers[1].output_shape[3]
             nr_channels_end = unet_2D.layers[12].output_shape[3] # DIT AANPASSEN
-            networkpath = r'Networks/network_{}D_epochs={}_bs={}_channels={}-{}'.format(dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end)
+            networkpath = r'Networks/network_{}D_epochs={}_bs={}_lr={}_channels={}-{}'.format(dimensions, num_epochs, batchsize, lr, nr_channels_start, nr_channels_end)
 
             # write model summary to file
             with open(r'{}_model.txt'.format(networkpath), 'w') as f:
                 with redirect_stdout(f):
                     unet_2D.summary()
 
-            early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, verbose=0, mode='min')
+            early_stopping = keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, verbose=0, mode='min')
             csv_logger = keras.callbacks.CSVLogger(r'{}_log.csv'.format(networkpath), separator='|', append=False)
 
             # train and save model
-            hist = unet_2D.fit(train_ims, gt_train_ims, batch_size=batchsize, epochs=num_epochs, validation_data=(val_ims, gt_val_ims), callbacks=[csv_logger], verbose=1, shuffle=True)
+            hist = unet_2D.fit(train_ims, gt_train_ims, batch_size=batchsize, epochs=num_epochs, validation_data=(val_ims, gt_val_ims), callbacks=[csv_logger, early_stopping], verbose=1, shuffle=True)
             unet_2D.save(r'{}.h5'.format(networkpath))
 
-            # plot loss and multilabel software of the training
+            # plot loss and multilabel software of the training and save to files
             visualizeTraining(hist, dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end)
 
         # evaluate the network on test data

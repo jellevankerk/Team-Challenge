@@ -5,6 +5,21 @@ import matplotlib.pyplot as plt
 from TC_data import *
 
 def calculateEF(seg_ED_images_3D, seg_ES_images_3D, test_spacings, patient):
+    '''
+    Preforms the calculations of the Ejaction fraction using the difference 
+    between the segmentations of the diastole and systole.
+    
+    Parameters: 
+        seg_ED_images_3D: an ndarray of the 3D segmented images of diastole
+        seg_ES_images_3D: an ndarray of the 3D segmented images of systole 
+        test_spacings: an ndarray of all the pixel spacings of the test images
+        patient: an int that defines the location of the the patient data in the iterators seg_ED_images_3D and sef_ES_images_3D
+        
+    Returns:
+        strokevolume: an float that describes the difference between the ED and the ES volumes
+        LVEF: an float that describes the left ventrical ejection fraction
+    '''
+    
     spacing = test_spacings[patient]
     seg_ED_im = seg_ED_images_3D[patient]
     seg_ES_im = seg_ES_images_3D[patient]
@@ -23,18 +38,34 @@ def calculateEF(seg_ED_images_3D, seg_ES_images_3D, test_spacings, patient):
     return strokevolume, LVEF
 
 def saveResults(images_3D, gt_images_3D, text_file, type="ED"):
+    '''
+    Calculates the softdice for all 4 gt labels and uses thes results to 
+    calculates the multiclass softdice. It does this for every slice in the 3D
+    images. The results of the minimum, maximum and average softdices and multiclassdice for every 
+    label are printed and writen to text file. 
+    
+    Parameters:
+        images_3D: an ndarray of the 3D images segmentation
+        gt_images_3D: an ndarray of the groundtruth labels for each segmentation
+        text_file: an string of the path where the data is to be saved.
+        type: an string; describes the type of images you want to use. ED: diastole images. ES: systole images
+    
+    Returns:
+        None
+        
+    '''
+    
     softdicelist0, softdicelist1, softdicelist2, softdicelist3 = [], [], [], []
     multiclass_softdicelist = []
+    
     for i in range(len(images_3D)):
         image = images_3D[i]
         gt_image = gt_images_3D[i]
-
         multiclass_softdice = 0
+        
         # calculate dice per channel for each 3D volume
         for label in range(image.shape[3]):
             softdice = round(softdice_coef_np(gt_image[:,:,:,label], image[:,:,:,label]),4)
-            # print("softdice {} for label {}".format(softdice, label))
-
             multiclass_softdice += softdice
 
             if label == 0:

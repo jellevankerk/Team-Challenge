@@ -2,6 +2,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def visualizeTraining(hist, dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end):
+    '''
+    Plots the training & validation softdice values and 
+    plot training & validation loss values
+    
+    Parameters:
+        hist:A History object. Its History.history attribute is a record of 
+             training loss values and metrics values at successive epochs,as well
+             as validation loss values and validation metrics values.
+        dimensions: an int, that describes the dimensions of the images used. 2 for slices; 3 for entire 3d images
+        num_epochs: ant int, that describes the number of epoches used
+        batchsize: an int, that describes the size of the batch
+        nr_channels_start: an int, that describes the number of channels at the start of the network
+        nr_channels_end: an int, that describes the number of channels at the end of the network
+    
+    Returns:
+        None
+        
+    '''
+    
     # Plot training & validation softdice values
     plt.figure()
     plt.plot(hist.history['softdice_coef_multilabel'])
@@ -23,8 +42,18 @@ def visualizeTraining(hist, dimensions, num_epochs, batchsize, nr_channels_start
     plt.savefig(r'Plots/lossplot_{}D_epochs={}_bs={}_channels={}-{}.png'.format(dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end))
 
 def visualize3Dimage(seg, im, savepath):
-    # seg (10, 144, 144, 4)
-    # im (10, 144, 144)
+    '''
+    Plots every slice of im with an overlay of the labels from seg
+    
+    Parameters:
+        seg: a ndarray, segmetation images with 4 labels; 0 background (orange), 
+             1 right ventricle (red) , 2 myocardium (green) & 3 left ventricle(blue)  
+        im: a ndarray, the actual images of the ED or ES
+        savepath: a string, that describes the path where final figure is saved
+    
+    Returns:
+        None
+    '''
     fig = plt.figure()
 
     # only one label
@@ -35,7 +64,8 @@ def visualize3Dimage(seg, im, savepath):
 
     n_rows = np.ceil(np.sqrt(im.shape[0]))
     n_cols = np.ceil(np.sqrt(im.shape[0]))
-
+    
+    #plots for ever slices the overlay
     for z in range(im.shape[0]):
         plt.subplot(n_rows, n_cols, 1 + z)
         plt.imshow(im[z, :, :], clim=(np.min(im), np.max(im)), cmap='gray')

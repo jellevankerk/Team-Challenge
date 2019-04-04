@@ -1,3 +1,97 @@
+'''
+Team challange group 1
+Writen by: Colin Nieuwlaat, Jelle van Kerkvoorde, Mandy de Graaf, Megan Schuurmans & Inge van der Schagt
+
+General description:
+    This program performs segmentation of the left vertricle, myocardium, right ventricle
+    and backgound of Cardiovascular Magnetic Resonance Images, with use of a convolutional Unet based
+    neural network. From each patient,  both a 3D end systolic image and a 3D end diastolic image is 
+    with its ground truth is available. The data set is devided into a training set, validation set and a test set. 
+    
+    First, The images are obtained from the stored location. Subsequently, these images are 
+    pre-processed which includes normalisation, removal of outliers and cropping. The training
+    subset is used to train the Network, afterwards, the Network is validated and further trained
+    by using the validation subset.
+    
+    After the network is trained, the network is evaluated using the subset regarding testing. 
+    The test images are segmented, using the trained network and these segmentations are 
+    evaluated by compairing them to the ground truth. The Dice Coefficient is calculated
+    to evaluate the overlay of the segmentation and the ground truth. Furthermore, the 
+    Hausdorff Distance is computed. 
+    
+    From the segmentations of the left ventricular cavity during the end systole and
+    end diastole, the ejection fraction is calculated. This value is compared to
+    the computed ejection fraction calculated from the ground truth.
+
+Contents program:
+    - TC_main.py:  Current python file, run this file to run the program.
+    - TC_model.py: Contains functions that initializes the network.
+    - TC_data.py:  Contains functions that initializes the data, preprocessing and 
+                   metrics used in training, evaluation & testing.
+    - TC_test.py:  Contains functions that show results of testing. 
+    - TC_visualization.py: visualises the intermediated and final results.
+    - TC_helper_functions.py: contains functions to make the main more clean
+    - Data: a map with all the patient data.
+    
+    
+Variables:
+    
+    trainnetwork:       Can be set to True or False. When set to True, the network
+                        is trained. When set to False, a Network is loaded from the
+                        networkpath.
+    evaluatenetwork:    Can be set to True or False. When set to True, the network is
+                        evaluated. If set to False, no evaluation is performed
+    networkpath:        Path to the stored Network 
+    trainingsetsize:    Number between 0 and 1 which defines the fraction of the data
+                        that is used for training. 
+    validationsetsize:  Number between 0 and 1 which defines the fraction of the 
+                        training set that will be used for validation.
+                        
+    num_epochs:         Integer that defines the number of itarations. Should be increased
+                        when the network should train more and should be decreased when
+                        the network does not learn any more.
+       
+
+    dropout:            Can be set to True or False in order to involve Drop-out
+                        in the Network or not.
+    dropoutpct:         Float between 0 and 1 which defines the amount of Drop-out
+                        you want to use. The higher the value, the more feature maps
+                        are removed         
+
+    lr:                 Float which defines the initial learning rate. Should be increased 
+                        when decreases very slowly.
+    momentum:           COLIN KUN JIJ DIT UITLEGGEN? :)
+    nesterov:           Can be set to True or False.
+    
+    
+    
+
+Python external modules installed (at least version):
+    - glob2 0.6
+    - numpy 1.15.4
+    - matplotlib 3.0.1
+    - keras 2.2.4
+    - SimpleITK 1.2.0
+    - scipy 1.1.0
+
+How to run:
+    Places all the files of zip file in the same map. 
+    Make sure all modules from above in you python interpreter.
+    Run TC_main in a python compatible IDE.
+    If you want to train your network, set  trainnetwork to True in main()
+    If you want to evaluate your network, set evaluationnetwork to True in main()
+    (you can find these at global settings).
+
+
+
+'''
+
+
+
+#%%
+#IMPORT MODULES & FUNCTIONS
+
+#import modules
 import glob2
 import os
 import numpy as np
@@ -9,16 +103,23 @@ from contextlib import redirect_stdout
 from keras.utils import to_categorical
 import keras
 
+#import own pythonfiles 
 from TC_data import *
 from TC_model import *
 from TC_visualization import *
 from TC_test import *
+from TC_helper_functions import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+#%%
+
 def main():
-    # global settings
-    trainnetwork = True
+    
+#--------------------------------------------------------------------------
+# GLOBAL SETTINGS 
+    
+    trainnetwork = False
     evaluatenetwork = True
 
     # networkpath only used when trainnetwork = False but evaluatenetwork = True
@@ -41,8 +142,11 @@ def main():
     momentum = 0.0
     decay = 1e-4
     nesterov = True
-    sgd = SGD(lr, momentum, decay, nesterov)
-
+    sgd = keras.optimizers.SGD(lr, momentum, decay, nesterov)
+    
+#--------------------------------------------------------------------------
+# LOADING IMAGES & PREPROCESSING
+    
     # make list of all patients
     patients = os.listdir('Data')
 
@@ -52,17 +156,8 @@ def main():
     test_patients = patients[trainsamples:]
 
     # now load images for all patients of the training set
-    ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings = [], [], [], [], []
-    for i in range(len(train_patients)):
-        patient = train_patients[i]
-        ED_im, ES_im, gt_ED_im, gt_ES_im, spacing = loadImages(patient)
-
-        ED_ims.append(ED_im)
-        ES_ims.append(ES_im)
-        gt_ED_ims.append(gt_ED_im)
-        gt_ES_ims.append(gt_ES_im)
-        spacings.append(spacing)
-
+    ED_ims, ES_ims, gt_ED_ims, gt_ES_ims, spacings = load_images_from_set(train_patients)
+    
     # make np array of the lists of arrays
     ED_ims = np.asarray(ED_ims)
     ES_ims = np.asarray(ES_ims)
@@ -83,6 +178,9 @@ def main():
 
     # normalize images to [0,1] range
     train_ims = normalize(train_ims)
+    
+#--------------------------------------------------------------------------
+# INITIALIZE SLICES & NETWORK FOR TRAINING OR EVALUATION
 
     if dimensions == 2:
 
@@ -120,11 +218,14 @@ def main():
         # initialize network
         unet_2D = get_unet_2D(cropdims[0], cropdims[1], sgd, dropoutpct, dropout, activation)
         unet_2D.summary()
-
+        
+#--------------------------------------------------------------------------
+# TRAINING NETWORK
+        
         if trainnetwork:
             # get nr of channels of model to put in network filename
             nr_channels_start = unet_2D.layers[1].output_shape[3]
-            nr_channels_end = unet_2D.layers[12].output_shape[3] # DIT AANPASSEN
+            nr_channels_end = unet_2D.layers[12].output_shape[3]
             networkpath = r'Networks/network_{}D_epochs={}_bs={}_lr={}_channels={}-{}'.format(dimensions, num_epochs, batchsize, lr, nr_channels_start, nr_channels_end)
 
             # write model summary to file
@@ -142,6 +243,9 @@ def main():
             # plot loss and multilabel software of the training and save to files
             visualizeTraining(hist, dimensions, num_epochs, batchsize, nr_channels_start, nr_channels_end)
 
+#--------------------------------------------------------------------------
+# EVALUATION OF NETWORK 
+            
         # evaluate the network on test data
         if evaluatenetwork:
 
@@ -150,18 +254,8 @@ def main():
             unet_2D = keras.models.load_model(r'{}.h5'.format(networkpath), custom_objects={'softdice_coef_multilabel': softdice_coef_multilabel, 'softdice_multilabel_loss': softdice_multilabel_loss, 'tversky_loss': tversky_loss})
 
             print("Preparing test data...")
-            test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings = [], [], [], [], []
-            # do for every patient
-            for i in range(len(test_patients)):
-                patient = test_patients[i]
-                test_ED_im, test_ES_im, test_gt_ED_im, test_gt_ES_im, test_spacing = loadImages(patient)
-
-                test_ED_ims.append(test_ED_im)
-                test_ES_ims.append(test_ES_im)
-                test_gt_ED_ims.append(test_gt_ED_im)
-                test_gt_ES_ims.append(test_gt_ES_im)
-                test_spacings.append(test_spacing)
-
+            test_ED_ims, test_ES_ims, test_gt_ED_ims, test_gt_ES_ims, test_spacings = load_images_from_set(test_patients)
+            
             # make np array of the lists of arrays
             test_ED_ims = np.asarray(test_ED_ims)
             test_ES_ims = np.asarray(test_ES_ims)
@@ -199,48 +293,23 @@ def main():
             test_gt_ES_ims = to_categorical(test_gt_ES_ims, num_classes=4)
             print("Test data prepared")
 
+#--------------------------------------------------------------------------
+# RESULTS EVALUATION
+            
             # make predictions for the test images
             print("Making segmentations...")
             pred_ED = unet_2D.predict(test_ED_ims, batch_size=batchsize, verbose=0)
             pred_ES = unet_2D.predict(test_ES_ims, batch_size=batchsize, verbose=0)
 
             # make the segmentations according to the probabilities
-            # every class label with probability >= 0.5 gets value of class label (0, 1, 2 or 3)
-            for i in range(pred_ED.shape[0]):
-                image = pred_ED[i,:,:,:]
-                for label in range(image.shape[2]):
-                    im = image[:,:,label]
-                    im = np.where(im >= 0.5, 1, 0)
-                    image[:,:,label] = im
-                    pred_ED[i,:,:,:] = image
-
-            for i in range(pred_ES.shape[0]):
-                image = pred_ES[i,:,:,:]
-                for label in range(image.shape[2]):
-                    im = image[:,:,label]
-                    im = np.where(im >= 0.5, 1, 0)
-                    image[:,:,label] = im
-                    pred_ES[i,:,:,:] = image
+            predict_label_seg(pred_ED)
+            predict_label_seg(pred_ES)
+       
 
             # reconstruct to 3D images in order to be able to calculate the EF
-            ED_images_3D = np.empty_like(test_ED_shape)
-            gt_ED_images_3D = np.empty_like(test_gt_ED_shape)
-            for i in range(len(test_ED_shape)):
-                # use saved shape to determine how many slices each 3D image should have
-                slices = int(test_ED_shape[i].shape[0])
-                image_3D = pred_ED[i:(i+slices),:,:,:]
-                gt_image_3D = test_gt_ED_ims[i:(i+slices),:,:,:]
-                ED_images_3D[i] = image_3D
-                gt_ED_images_3D[i] = gt_image_3D
-
-            ES_images_3D = np.empty_like(test_ES_shape)
-            gt_ES_images_3D = np.empty_like(test_gt_ES_shape)
-            for i in range(len(test_ES_shape)):
-                slices = int(test_ES_shape[i].shape[0])
-                image_3D = pred_ES[i:(i+slices),:,:,:]
-                gt_image_3D = test_gt_ES_ims[i:(i+slices),:,:,:]
-                ES_images_3D[i] = image_3D
-                gt_ES_images_3D[i] = gt_image_3D
+            ED_images_3D, gt_ED_images_3D = reconstruct_3D(test_ED_shape,test_gt_ED_shape, test_gt_ED_ims, pred_ED)
+            ES_images_3D, gt_ES_images_3D = reconstruct_3D(test_ES_shape,test_gt_ES_shape, test_gt_ES_ims, pred_ES)
+        
             print("Segmentations made")
 
             # calculate various results and save to text file
@@ -264,7 +333,10 @@ def main():
             # see if folder to save plots exist, else make it
             if not os.path.isdir(networkpath):
                 os.mkdir(networkpath)
-
+                
+#--------------------------------------------------------------------------
+#VISUALIZATION OF RESULTS    
+                
             # plot and save 3D images for all patients in test set, including overlay of segmentation
             print("Saving segmentation images...")
             for i in range(len(ED_images_3D)):

@@ -4,23 +4,16 @@ Written by: Colin Nieuwlaat, Jelle van Kerkvoorde, Mandy de Graaf, Megan Schuurm
 
 # General description:
     This program performs segmentation of the left vertricle, myocardium, right ventricle
-    and backgound of Cardiovascular Magnetic Resonance Images, with use of a convolutional neural network based on the well-known U-Net     architecture. MRI images from the ACDC From each patient, both a 3D end systolic image and a 3D end diastolic image is 
-    with its ground truth is available. The data set is devided into a training set, validation set and a test set. 
+    and backgound of Cardiovascular Magnetic Resonance Images, with use of a convolutional neural network based on the well-known U-Net     architecture, as described by [https://arxiv.org/pdf/1505.04597.pdf](Ronneberger et al.) For each patient, both a 3D end systolic       image and a 3D end diastolic image with its corresponding ground truth segmentation of the left ventricle, myocardium and right         ventricle is available. 
     
-    First, The images are obtained from the stored location. Subsequently, these images are 
-    pre-processed which includes normalisation, removal of outliers and cropping. The training
-    subset is used to train the Network, afterwards, the Network is validated and further trained
-    by using the validation subset.
+    The available code first divides the patients data into a training set and a test set. The training data is then loaded from the        stored location and subsequently preprocessed. Preprocessing steps include resampling the image to the same voxel spacing, removal of outliers, normalization, cropping and one-hot encoding of the labels. Before training, the trainingset is subdivided again for training and validation of the model.
     
-    After the network is trained, the network is evaluated using the subset regarding testing. 
-    The test images are segmented, using the trained network and these segmentations are 
-    evaluated by compairing them to the ground truth. The Dice Coefficient is calculated
-    to evaluate the overlay of the segmentation and the ground truth. Furthermore, the 
-    Hausdorff Distance is computed. 
+    For training, a network based on the U-Net architecture is used and implemented with keras. For training, many different variables       can be tweaked, which are described in some detail below. After training, the network is evaluated using the test dataset. This data is loaded and preprocessed in the same way as the training dataset and propagated through the network to obtain pixel-wise predictions for each class. These predictions are probabilities and are thresholded to obtain a binary segmentation. 
     
-    From the segmentations of the left ventricular cavity during the end systole and
-    end diastole, the ejection fraction is calculated. This value is compared to
-    the computed ejection fraction calculated from the ground truth.
+    The binary segmentations are then evaluated by computing the (multiclass) softdice coefficient and the Hausdorff distance between the obtained segmentations and the ground truth segmentations. The softdice coefficients and Hausdorff distances are computed for each image for each individual class and the multiclass softdice for all the classes together. These results are all automatically saved in a text file. Furthermore, the obtained segmentations as an overlay with the original images, the training log and corresponding plots and the model summary are also saved automatically.
+   
+    Lastly, from the segmentations of the left ventricular cavity during the end systole and end diastole, the ejection fraction is calculated. This value is, alongside the ejection fraction computed from the ground truth segmentations, stored in the same text file with results.
+   
 
 # Contents program:
     - TC_main.py:  Current python file, run this file to run the program.
@@ -36,31 +29,35 @@ Written by: Colin Nieuwlaat, Jelle van Kerkvoorde, Mandy de Graaf, Megan Schuurm
 # Variables:
     
     trainnetwork:       Can be set to True or False. When set to True, the network
-                        is trained. When set to False, a Network is loaded from the
+                        is trained. When set to False, a network is loaded from the
                         networkpath.
     evaluatenetwork:    Can be set to True or False. When set to True, the network is
                         evaluated. If set to False, no evaluation is performed
-    networkpath:        Path to the stored Network 
+    networkpath:        Path to a stored network 
     trainingsetsize:    Number between 0 and 1 which defines the fraction of the data
-                        that is used for training. 
+                        that is used for training. The rest of the data will be used for testing.
     validationsetsize:  Number between 0 and 1 which defines the fraction of the 
-                        training set that will be used for validation.
+                        training set that will be used for validation. The rest of the data will be used for training.
+    cropdims:           Dimensions that the cropped images should have.
                         
-    num_epochs:         Integer that defines the number of itarations. Should be increased
-                        when the network should train more and should be decreased when
-                        the network does not learn any more.
+    num_epochs:         Integer that defines the number of training iterations.
+    batchsize:          The number of samples that will be used in one pass through the network.
        
 
-    dropout:            Can be set to True or False in order to involve Drop-out
-                        in the Network or not.
-    dropoutpct:         Float between 0 and 1 which defines the amount of Drop-out
-                        you want to use. The higher the value, the more feature maps
-                        are removed         
+    dropout:            Can be set to True or False in order to activate dropout layers
+                        in the Network.
+    dropoutpct:         Float between 0 and 1 which defines the amount of dropout
+                        each dropout layer uses.   
+    activation:         Activation function, can be set to a string to define the activation function used after each 
+                        convolution layer (e.g. 'relu')
 
-    lr:                 Float which defines the initial learning rate. Should be increased 
-                        when decreases very slowly.
-    momentum:           COLIN KUN JIJ DIT UITLEGGEN? :)
-    nesterov:           Can be set to True or False.
+    lr:                 Float (>=0) which defines the initial learning rate for the stochastic gradient descent (SGD) optimization                               algorithm.
+    momentum:           Float (>=0) which defines the amount of momentum used for the SGD algorithm.
+    decay:              Float (>=0) which describes the decay of the learning rate after each epoch
+    nesterov:           Whether to apply Nesterov momentum. Can be set to True or False.
+    
+    lr_schedule:        Can be set to True or False. When set to True, a custom learning rate schedule will be used as described by
+                        the scheduler function in TC_helper_functions.py.
     
     
     
@@ -73,10 +70,10 @@ Written by: Colin Nieuwlaat, Jelle van Kerkvoorde, Mandy de Graaf, Megan Schuurm
     - scipy 1.1.0
 
 # How to run:
-    Places all the files of zip file in the same map. 
-    Make sure all modules from above in you python interpreter.
-    Run TC_main in a python compatible IDE.
-    If you want to train your network, set  trainnetwork to True in main()
-    If you want to evaluate your network, set evaluationnetwork to True in main()
+    Place all the files of zip file in the same folder together with the Data folder. 
+    Make sure all modules from above are installed.
+    Run TC_main.py in a python compatible IDE.
+    If you want to train your network, set trainnetwork to True in main()
+    If you want to evaluate your network, set evaluationnetwork to True in main() and change networkpath to the network you want to evaluate
     (you can find these at global settings).
 

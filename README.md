@@ -1,11 +1,10 @@
 # Team-Challenge
-Team challange group 1
-Writen by: Colin Nieuwlaat, Jelle van Kerkvoorde, Mandy de Graaf, Megan Schuurmans & Inge van der Schagt
+Team challenge group 1
+Written by: Colin Nieuwlaat, Jelle van Kerkvoorde, Mandy de Graaf, Megan Schuurmans & Inge van der Schagt
 
 # General description:
     This program performs segmentation of the left vertricle, myocardium, right ventricle
-    and backgound of Cardiovascular Magnetic Resonance Images, with use of a convolutional Unet based
-    neural network. From each patient,  both a 3D end systolic image and a 3D end diastolic image is 
+    and backgound of Cardiovascular Magnetic Resonance Images, with use of a convolutional neural network based on the well-known U-Net     architecture. MRI images from the ACDC From each patient, both a 3D end systolic image and a 3D end diastolic image is 
     with its ground truth is available. The data set is devided into a training set, validation set and a test set. 
     
     First, The images are obtained from the stored location. Subsequently, these images are 
